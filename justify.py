@@ -15,18 +15,29 @@ from email import encoders
 import openai
 from datetime import datetime
 import re
-import plotly.express as px
+# import plotly.express as px
 import requests
 from docx2pdf import convert
-import pythoncom  
-from io import BytesIO  
+from io import BytesIO
+from dotenv import load_dotenv
+import time
 
-# Set your OpenAI API key
-openai.api_key = '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'
+# Your existing code
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Set your OpenAI API key from environment variable
+# openai.api_key = os.getenv('OPENAI_API_KEY')
+openai.api_key = st.secrets["OPENAI_API_KEY"]
 
 # Set your Telegram bot token and chat ID
-telegram_bot_token = '7350243325:AAHZfDsZILAkAHSImd2ja0BwoYVt_VjkMxE'
-telegram_chat_id = '-1002164741954'
+telegram_bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
+telegram_chat_id = '-1002164741954'  # This can stay hardcoded or also be moved to an environment variable if needed
+
+# Email configuration
+from_email = "seaklav168@gmail.com"
+password = os.getenv('EMAIL_PASSWORD')
 
 def send_to_telegram(file_path, caption):
     url = f"https://api.telegram.org/bot{telegram_bot_token}/sendDocument"
@@ -34,16 +45,13 @@ def send_to_telegram(file_path, caption):
         response = requests.post(url, data={'chat_id': telegram_chat_id, 'caption': caption}, files={'document': file})
     return response
 
-# Function to generate a report using the ChatGPT API and create visualizations
 def generate_report_with_chatgpt(data, report_title):
     try:
         prompt = (
-            f"Please give a formal report based on  provided data and contents as below:  "
-            "Insert a page break here.\n\n"
+            f"Please give a formal report based on provided data and contents as below:  "
             "Insert a page break here.\n\n"
             "table of content"
             "Please generate a formal Table of Contents for a report. The Table of Contents should have each section title followed by a series of dots (dot leaders) leading to the corresponding page number. Ensure the page numbers are aligned to the right margin, like in the example below:"
-
             "1. Introduction................................. 1"
             "2. Data Visualization........................... 5"
             "3. Results...................................... 9"
@@ -54,36 +62,40 @@ def generate_report_with_chatgpt(data, report_title):
             "Insert a page break here.\n\n"
             "1. Introduction "
             "Please describe more details about each of the subheadings:"
-            "1.1. Demographic Profile:  Describe about respondents, age, gender."
-            "1.2. Land Ownership and Cultivation : Describe about their overall land. "
-            "1.3. Horticulture Practices: Describe about crops, land and yield of each year "
-            "1.4 Satisfaction Rates : The overall satisfaction."
+            "1.1. Demographic Profile: Describe respondents, age, gender."
+            "1.2. Land Ownership and Cultivation: Describe their overall land."
+            "1.3. Horticulture Practices: Describe crops, land, and yield of each year."
+            "1.4 Satisfaction Rates: The overall satisfaction."
             "2. Data Visualization "
-            "In sheet , There are huge difference before and after the project. We want to know that how much land, frequency and yield have been increased or decreased after project. Please provide table and graph comparing the increase or decrease of land, frequency of plant and the yield."
-            "Also, describe the percentage of crops that has been planted as well."
-            "3. Discussion and Results " 
+            "In sheet, there are huge differences before and after the project. We want to know how much land, frequency, and yield have increased or decreased after the project. Please provide a table and graph comparing the increase or decrease of land, frequency of plant, and the yield."
+            "Also, describe the percentage of crops that have been planted as well."
+            "3. Discussion and Results "
             "Overall results "
             "4. Conclusion and Recommendations: conclude everything and give recommendations."
-            "please describe each part more detailed."
+            "Please describe each part more detailed."
             f"{json.dumps(data, indent=2)}"
         )
-        
+
         response = openai.ChatCompletion.create(
             model="gpt-4o-mini",  # Or "gpt-3.5-turbo"
             messages=[{"role": "system", "content": "You are a helpful assistant."}, {"role": "user", "content": prompt}],
             max_tokens=8000,
             temperature=0.7
         )
-        
+
         report_parts = response.choices[0].message['content'].strip()
+
+        # Store report parts in session state to avoid re-running
+        # st.session_state["report_parts"] = report_parts
+
         st.write(report_parts)
-        
+
         # Save report as Word and PDF documents with the dynamic title
         word_filename = f'{report_title}.docx'
         pdf_filename = f'{report_title}.pdf'
         save_report_as_word(report_parts, word_filename)
         convert_to_pdf_with_retry(word_filename, pdf_filename)
-        
+
         return report_parts, word_filename, pdf_filename
     except Exception as e:
         st.error(f"Failed to generate report: {e}")
@@ -111,14 +123,14 @@ def create_cover_page(doc, report_title):
 
         run = paragraph.add_run()
         run.add_picture(logo_image, width=Pt(150))  # Adjust width as needed
-        
+
         # Add company name after the logo
         run = paragraph.add_run("  DCx Co., Ltd.")
         run.font.size = Pt(24)
         run.bold = True
     else:
         st.error("Failed to download the logo image.")
-    
+
     doc.add_paragraph("\n")
     cover = doc.add_paragraph()
     cover.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -126,7 +138,7 @@ def create_cover_page(doc, report_title):
     run = cover.add_run("Report")
     run.font.size = Pt(20)
     run.bold = True
-    cover.add_run("\n").font.size = Pt(24) 
+    cover.add_run("\n").font.size = Pt(24)
 
     # Add some spacing
     doc.add_paragraph("\n")
@@ -136,16 +148,8 @@ def create_cover_page(doc, report_title):
     run = cover.add_run("Indigenous Agriculture Adaptation")
     run.font.size = Pt(24)
     run.bold = True
-    cover.add_run("\n").font.size = Pt(24) 
+    cover.add_run("\n").font.size = Pt(24)
 
-    # Add title centered below the logo and company name
-    # title_paragraph = doc.add_paragraph()
-    # title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    # run = title_paragraph.add_run(report_title)
-    # run.font.size = Pt(24)
-    # run.bold = True
-
-    # Add some spacing
     for _ in range(2):
         doc.add_paragraph("\n")
 
@@ -160,30 +164,23 @@ def create_cover_page(doc, report_title):
     run.font.size = Pt(14)
     run.add_break()
     run.add_break()
-    # run = prepared_for.add_run(f"Date: {datetime.now().strftime('%B %d, %Y')}")
-    # run.font.size = Pt(18)
 
-    # Place the date at the bottom center of the page
+    # Place the date at the bottom center of the cover page
     footer = section.footer
     footer_paragraph = footer.paragraphs[0]
     footer_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = footer_paragraph.add_run(f"Date: {datetime.now().strftime('%B %d, %Y')}")
     run.font.size = Pt(14)
 
-    
-    # # Add some spacing
-    # for _ in range(5):
-    #     doc.add_paragraph("\n")
+    # Create a new section for the rest of the document, so the footer with the date is not repeated
+    new_section = doc.add_section(WD_SECTION.NEW_PAGE)
 
-    # Ensure the cover page is a separate section
-    new_section = doc.add_section(WD_SECTION.CONTINUOUS)
+    # Ensure the new section starts with a fresh header and footer
+    new_section.footer.is_linked_to_previous = False
+    new_section.footer.paragraphs[0].clear()
+    new_section.header.is_linked_to_previous = False
 
 def add_markdown_formatted_text(paragraph, text):
-    """
-    Parses the input text for markdown-style formatting and applies it to the Word paragraph.
-    Supports bold (**text**), italic (*text*), and bold-italic (***text***).
-    """
-    # Define regex patterns for the different markdown styles
     bold_italic_pattern = re.compile(r'\*\*\*(.+?)\*\*\*')
     bold_pattern = re.compile(r'\*\*(.+?)\*\*')
     italic_pattern = re.compile(r'\*(.+?)\*')
@@ -192,8 +189,7 @@ def add_markdown_formatted_text(paragraph, text):
         ('bold', bold_pattern),
         ('italic', italic_pattern)
     ]
-    
-    # Function to replace the matched text with the correct formatting
+
     def replace_match(match, style):
         if style == 'bold_italic':
             run = paragraph.add_run(match.group(1))
@@ -209,7 +205,6 @@ def add_markdown_formatted_text(paragraph, text):
     cursor = 0
     text_length = len(text)
     while cursor < text_length:
-        # Find the nearest markdown pattern
         nearest_match = None
         nearest_style = None
         nearest_start = text_length
@@ -224,14 +219,11 @@ def add_markdown_formatted_text(paragraph, text):
                     nearest_start = start
 
         if nearest_match:
-            # Add text before the markdown pattern
             if nearest_start > cursor:
                 paragraph.add_run(text[cursor:nearest_start])
-            # Add the formatted text
             replace_match(nearest_match, nearest_style)
             cursor = nearest_match.end()
         else:
-            # No more patterns found
             paragraph.add_run(text[cursor:])
             break
 
@@ -240,16 +232,14 @@ def add_markdown_formatted_text(paragraph, text):
 def save_report_as_word(report, filename):
     try:
         doc = Document()
-        
-        # Set the margins to 2 cm (56.7 points)
+
         for section in doc.sections:
             section.top_margin = Pt(56.7)
             section.bottom_margin = Pt(56.7)
             section.left_margin = Pt(56.7)
             section.right_margin = Pt(56.7)
-        
-        # Create cover page
-        create_cover_page(doc, filename.split('.')[0])  # Pass the report title
+
+        create_cover_page(doc, filename.split('.')[0])
 
         lines = report.split('\n')
         table = None
@@ -287,22 +277,42 @@ def save_report_as_word(report, filename):
     except Exception as e:
         st.error(f"Failed to save Word report: {e}")
 
+# def convert_to_pdf_with_retry(word_filename, pdf_filename, retries=3, delay=5):
+#     try:
+#         pythoncom.CoInitialize()
+#         for attempt in range(retries):
+#             try:
+#                 convert(word_filename, pdf_filename)
+#                 return
+#             except Exception as e:
+#                 st.error(f"Attempt {attempt + 1} failed: {e}")
+#                 if attempt < retries - 1:
+#                     time.sleep(delay)
+#                 else:
+#                     st.error("Failed to convert Word to PDF after multiple attempts.")
+#     finally:
+#         pythoncom.CoUninitialize()
 def convert_to_pdf_with_retry(word_filename, pdf_filename, retries=3, delay=5):
-    try:
-        pythoncom.CoInitialize()  # Ensure COM is initialized
-        for attempt in range(retries):
-            try:
-                convert(word_filename, pdf_filename)
-                return
-            except Exception as e:
-                st.error(f"Attempt {attempt + 1} failed: {e}")
-                if attempt < retries - 1:
-                    time.sleep(delay)
-                else:
-                    st.error("Failed to convert Word to PDF after multiple attempts.")
-    finally:
-        pythoncom.CoUninitialize()  # Clean up COM initialization
+    for attempt in range(retries):
+        try:
+            convert(word_filename, pdf_filename)
+            st.success("Conversion successful!")
+            return
+        except Exception as e:
+            st.error(f"Attempt {attempt + 1} failed: {e}")
+            if attempt < retries - 1:
+                time.sleep(delay)
+            else:
+                st.error("Failed to convert Word to PDF after multiple attempts.")
 
+# def create_zip_file(word_filename, pdf_filename, zip_filename):
+#     try:
+#         with zipfile.ZipFile(zip_filename, 'w') as zipf:
+#             zipf.write(word_filename)
+#             zipf.write(pdf_filename)
+#         st.success(f"Zip file {zip_filename} created successfully.")
+#     except Exception as e:
+#         st.error(f"Failed to create zip file: {e}")
 def create_zip_file(word_filename, pdf_filename, zip_filename):
     try:
         with zipfile.ZipFile(zip_filename, 'w') as zipf:
@@ -313,9 +323,7 @@ def create_zip_file(word_filename, pdf_filename, zip_filename):
         st.error(f"Failed to create zip file: {e}")
 
 def send_email_with_attachments(subject, body, attachments):
-    from_email = "seaklav168@gmail.com"
-    password = "wnfj ptne wqhf joie"
-    to_email = ["hratana261@gmail.com", "khengdalish21@gmail.com", "chlakhna702@gmail.com"]  # Replace with the fixed email addresses
+    to_email = ["hratana261@gmail.com", "khengdalish21@gmail.com", "chlakhna702@gmail.com"]
 
     msg = MIMEMultipart()
     msg['From'] = from_email
@@ -334,7 +342,7 @@ def send_email_with_attachments(subject, body, attachments):
                 msg.attach(part)
         except Exception as e:
             st.error(f"Failed to attach file {attachment}: {e}")
-    
+
     try:
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
@@ -361,29 +369,22 @@ def fetch_pivot_data(pivot_table_url):
         return None
     return pivot_df
 
-# def create_visualizations(df):
-#     st.header("Data Visualizations")
+def ask_about_data(data, question):
+    try:
+        prompt = f"Given the following data:\n{data.to_csv(index=False)}\nAnswer the following question: {question}"
 
-#     numeric_cols = df.select_dtypes(include='number').columns.tolist()
-    
-#     if not numeric_cols:
-#         st.warning("No numeric columns found in the dataset for visualization.")
-#         return
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[{"role": "system", "content": "You are a data analyst."}, {"role": "user", "content": prompt}],
+            max_tokens=500,
+            temperature=0.5
+        )
 
-#     if 'Age' in numeric_cols:
-#         fig1 = px.histogram(df, x='Age', title='Distribution of Participants by Age')
-#         st.plotly_chart(fig1)
-
-#     crop_columns = [col for col in df.columns if 'yield' in col.lower() or 'harvest' in col.lower()]
-#     if crop_columns:
-#         for col in crop_columns:
-#             fig = px.bar(df, x='Name of vegetable or variety vegetable(1)', y=col, title=f'Average {col} by Crop Type')
-#             st.plotly_chart(fig)
-
-#     if 'Interview Date' in df.columns:
-#         for col in crop_columns:
-#             fig = px.line(df, x='Interview Date', y=col, title=f'{col} Over Time')
-#             st.plotly_chart(fig)
+        answer = response.choices[0].message['content'].strip()
+        return answer
+    except Exception as e:
+        st.error(f"Failed to get a response: {e}")
+        return None
 
 def dashboard():
     st.set_page_config(
@@ -442,6 +443,7 @@ def dashboard():
         )
     else:
         report_title = None
+        df = None
         st.markdown(
             """
             <div style="display: flex; align-items: center;">
@@ -470,11 +472,48 @@ def dashboard():
         df_style = df.style.set_properties(**{'background-color': 'rgb(161, 219, 255, 0.3)', 'color': 'white'})
         st.dataframe(df_style)
 
-        # Add button to generate report with custom style
+        st.markdown(
+            """
+            <div style="display: flex; align-items: center;">
+                <label for="question_input" style="font-family: 'Khmer OS Muol Light', Arial, sans-serif; font-size: 14px;">សូមបញ្ចូលសំណួរ:</label>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            # Text input field
+            question = st.text_input(" ", key="question_input_key")
+
+        with col2:
+            st.markdown("""
+                <style>
+                div.stButton > button {
+                    width: auto;
+                    height: 40px;
+                    margin-top: 11px;
+                }
+                div.stButton > button:hover {
+                    background-color: darkgreen;
+                }
+                </style>
+                """, unsafe_allow_html=True)
+            search = st.button("Search")
+
+        # Display the answer if the button is clicked
+        if search and question:
+            st.session_state["search_result"] = ask_about_data(df, question)
+
+        if "search_result" in st.session_state:
+            st.write(st.session_state["search_result"])
+
+         # Add button to generate report with custom style
         button_style = """
             <style>
             .stButton>button {
                 background-color: green;
+                margin-buttom: 24px;
                 color: white;
                 border: none;
                 padding: 0.5em 1em;
@@ -496,21 +535,47 @@ def dashboard():
                 data = df_cleaned.to_dict(orient='records')  # Convert DataFrame to dictionary format
 
                 # Generate report with the ChatGPT API
-                report_content, word_filename, pdf_filename = generate_report_with_chatgpt(data, report_title)
+                if "report_parts" not in st.session_state:
+                    report_content, word_filename, pdf_filename = generate_report_with_chatgpt(data, report_title)
+                else:
+                    report_content = st.session_state["report_parts"]
+                    word_filename = f'{report_title}.docx'
+                    pdf_filename = f'{report_title}.pdf'
+                    save_report_as_word(report_content, word_filename)
+                    convert_to_pdf_with_retry(word_filename, pdf_filename)
 
                 if report_content:
                     zip_filename = f'{report_title}.zip'
                     create_zip_file(word_filename, pdf_filename, zip_filename)
-                    
+
                     # Send email with the zip file
                     send_email_with_attachments(f"{report_title} Generated Report", "Please find the attached reports.", [zip_filename])
 
                     # Send report to Telegram
                     send_to_telegram(word_filename, f"Here is your generated {report_title} (Word).")
                     send_to_telegram(pdf_filename, f"Here is your generated {report_title} (PDF).")
-                    
+
+                    # Custom style for the download button
+                    st.markdown("""
+                    <style>
+                    div.stDownloadButton > button {
+                        background-color: #006400;
+                        color: white;
+                        padding: 10px;
+                        font-size: 16px;
+                        border-radius: 5px;
+                        border: none;
+                        cursor: pointer;
+                    }
+                    div.stDownloadButton > button:hover {
+                        background-color: #005000;
+                        color: #DFFF00;
+                    }
+                    </style>
+                    """, unsafe_allow_html=True)
+
                     # Allow downloading of the zip file
-                    st.download_button(f'Download {report_title} Reports', data=open(zip_filename, 'rb').read(), file_name=zip_filename, mime='application/zip')
+                    st.download_button(f'Download {report_title}', data=open(zip_filename, 'rb').read(), file_name=zip_filename, mime='application/zip')
                 else:
                     st.write("Failed to generate report.")
 
