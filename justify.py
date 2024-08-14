@@ -461,7 +461,7 @@ def ask_about_data(data, question):
         prompt = f"Given the following data:\n{data.to_csv(index=False)}\nAnswer the following question: {question}"
 
         response = openai.ChatCompletion.create(
-            model="gpt-4",
+            model="gpt-4o-mini",
             messages=[{"role": "system", "content": "You are a data analyst."}, {"role": "user", "content": prompt}],
             max_tokens=500,
             temperature=0.5
