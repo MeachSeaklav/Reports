@@ -58,7 +58,6 @@ def generate_report_with_chatgpt(data, report_title):
     try:
         prompt = (
             f"Please give a formal report based on provided data and contents as below:  "
-            "Insert a page break here.\n\n"
             "table of content"
             "Please generate a formal Table of Contents for a report. The Table of Contents should have each section title followed by a series of dots (dot leaders) leading to the corresponding page number. Ensure the page numbers are aligned to the right margin, like in the example below:"
             "1. Introduction................................. 1"
