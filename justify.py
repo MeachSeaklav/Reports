@@ -270,7 +270,14 @@ def save_report_as_word(report, filename):
     except Exception as e:
         st.error(f"Failed to save Word report: {e}")
 
+def ensure_pandoc_installed():
+    try:
+        pypandoc.get_pandoc_version()  # Check if pandoc is already installed
+    except OSError:
+        pypandoc.download_pandoc()  # Download pandoc if it's not installed
+
 def convert_to_pdf_with_retry(word_filename, pdf_filename, retries=3, delay=5):
+    ensure_pandoc_installed()  # Ensure pandoc is available
     for attempt in range(retries):
         try:
             pypandoc.convert_file(word_filename, 'pdf', outputfile=pdf_filename)
