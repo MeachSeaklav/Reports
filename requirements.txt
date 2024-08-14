@@ -45,10 +45,10 @@ Pygments==2.18.0
 python-dateutil==2.9.0.post0
 python-docx==1.1.2
 python-dotenv==1.0.1
-pypandoc==1.10
 pytz==2024.1
 referencing==0.35.1
 requests==2.32.3
+reportlab==4.0.4
 rich==13.7.1
 rpds-py==0.20.0
 six==1.16.0
