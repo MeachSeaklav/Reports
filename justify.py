@@ -20,6 +20,10 @@ from io import BytesIO
 from dotenv import load_dotenv
 import time
 from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
 from reportlab.pdfgen import canvas
 
 # Load environment variables from .env file
@@ -273,21 +277,51 @@ def save_report_as_word(report, filename):
 
 def save_report_as_pdf(report, filename):
     try:
-        pdf = canvas.Canvas(filename, pagesize=letter)
-        width, height = letter
+        doc = SimpleDocTemplate(filename, pagesize=letter)
+        elements = []
 
-        y_position = height - 50
+        # Add the cover page
+        cover_style = ParagraphStyle(name='CoverStyle', fontSize=24, alignment=TA_CENTER, spaceAfter=12)
+        elements.append(Paragraph("DCx Co., Ltd.", cover_style))
+        elements.append(Spacer(1, 24))
+        elements.append(Paragraph("Report", cover_style))
+        elements.append(Spacer(1, 24))
+        elements.append(Paragraph("Indigenous Agriculture Adaptation", cover_style))
+        elements.append(Spacer(1, 24))
+        elements.append(Paragraph(f"Prepared for: Jack Jasmin", ParagraphStyle(name='Normal', fontSize=14, alignment=TA_CENTER)))
+        elements.append(Spacer(1, 12))
+        elements.append(Paragraph(f"Prepared by: Black Eye Team", ParagraphStyle(name='Normal', fontSize=14, alignment=TA_CENTER)))
+        elements.append(Spacer(1, 12))
+        elements.append(Paragraph(f"Date: {datetime.now().strftime('%B %d, %Y')}", ParagraphStyle(name='Normal', fontSize=14, alignment=TA_CENTER)))
+        elements.append(Spacer(1, 36))
 
+        # Create the style for the document
+        styles = getSampleStyleSheet()
+        normal_style = ParagraphStyle(name='Normal', fontSize=12, leading=14, alignment=TA_JUSTIFY)
+        heading1_style = ParagraphStyle(name='Heading1', fontSize=16, leading=18, alignment=TA_CENTER, spaceAfter=12)
+        heading2_style = ParagraphStyle(name='Heading2', fontSize=14, leading=16, alignment=TA_CENTER, spaceAfter=12)
+        bullet_style = ParagraphStyle(name='Bullet', fontSize=12, leading=14, alignment=TA_JUSTIFY, bulletIndent=12)
+
+        # Split the report into lines
         lines = report.split('\n')
+
+        # Convert the report text into Paragraphs for the PDF
         for line in lines:
-            pdf.drawString(30, y_position, line)
-            y_position -= 12  # Move to the next line, adjusting the spacing as needed
+            line = line.strip()
+            if not line:
+                elements.append(Spacer(1, 12))
+            elif line.startswith('# '):
+                elements.append(Paragraph(line[2:], heading1_style))
+            elif line.startswith('## '):
+                elements.append(Paragraph(line[3:], heading2_style))
+            elif line.startswith('* '):
+                elements.append(Paragraph(line[2:], bullet_style))
+            else:
+                elements.append(Paragraph(line, normal_style))
+            elements.append(Spacer(1, 12))
 
-            if y_position < 50:
-                pdf.showPage()
-                y_position = height - 50
-
-        pdf.save()
+        # Build the PDF
+        doc.build(elements)
     except Exception as e:
         st.error(f"Failed to save PDF report: {e}")
 
