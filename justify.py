@@ -16,10 +16,11 @@ import openai
 from datetime import datetime
 import re
 import requests
-import pypandoc
 from io import BytesIO
 from dotenv import load_dotenv
 import time
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
 
 # Load environment variables from .env file
 load_dotenv()
@@ -87,7 +88,7 @@ def generate_report_with_chatgpt(data, report_title):
         word_filename = f'{report_title}.docx'
         pdf_filename = f'{report_title}.pdf'
         save_report_as_word(report_parts, word_filename)
-        convert_to_pdf_with_retry(word_filename, pdf_filename)
+        save_report_as_pdf(report_parts, pdf_filename)
 
         return report_parts, word_filename, pdf_filename
     except Exception as e:
@@ -270,30 +271,25 @@ def save_report_as_word(report, filename):
     except Exception as e:
         st.error(f"Failed to save Word report: {e}")
 
-def ensure_pandoc_installed():
+def save_report_as_pdf(report, filename):
     try:
-        pypandoc.get_pandoc_version()  # Check if pandoc is already installed
-    except OSError:
-        pypandoc.download_pandoc()  # Download pandoc if it's not installed
+        pdf = canvas.Canvas(filename, pagesize=letter)
+        width, height = letter
 
-def convert_to_pdf_with_retry(word_filename, pdf_filename, retries=3, delay=5):
-    ensure_pandoc_installed()  # Ensure pandoc is available
-    for attempt in range(retries):
-        try:
-            pypandoc.convert_file(
-                word_filename, 
-                'pdf', 
-                outputfile=pdf_filename,
-                extra_args=['--pdf-engine=wkhtmltopdf']  # Use wkhtmltopdf as the PDF engine
-            )
-            st.success("Conversion successful!")
-            return
-        except Exception as e:
-            st.error(f"Attempt {attempt + 1} failed: {e}")
-            if attempt < retries - 1:
-                time.sleep(delay)
-            else:
-                st.error("Failed to convert Word to PDF after multiple attempts.")
+        y_position = height - 50
+
+        lines = report.split('\n')
+        for line in lines:
+            pdf.drawString(30, y_position, line)
+            y_position -= 12  # Move to the next line, adjusting the spacing as needed
+
+            if y_position < 50:
+                pdf.showPage()
+                y_position = height - 50
+
+        pdf.save()
+    except Exception as e:
+        st.error(f"Failed to save PDF report: {e}")
 
 def create_zip_file(word_filename, pdf_filename, zip_filename):
     try:
@@ -524,7 +520,7 @@ def dashboard():
                     word_filename = f'{report_title}.docx'
                     pdf_filename = f'{report_title}.pdf'
                     save_report_as_word(report_content, word_filename)
-                    convert_to_pdf_with_retry(word_filename, pdf_filename)
+                    save_report_as_pdf(report_content, pdf_filename)
 
                 if report_content:
                     zip_filename = f'{report_title}.zip'
