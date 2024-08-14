@@ -280,7 +280,12 @@ def convert_to_pdf_with_retry(word_filename, pdf_filename, retries=3, delay=5):
     ensure_pandoc_installed()  # Ensure pandoc is available
     for attempt in range(retries):
         try:
-            pypandoc.convert_file(word_filename, 'pdf', outputfile=pdf_filename)
+            pypandoc.convert_file(
+                word_filename, 
+                'pdf', 
+                outputfile=pdf_filename,
+                extra_args=['--pdf-engine=wkhtmltopdf']  # Use wkhtmltopdf as the PDF engine
+            )
             st.success("Conversion successful!")
             return
         except Exception as e:
