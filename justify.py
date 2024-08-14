@@ -19,18 +19,26 @@ import requests
 from io import BytesIO
 from dotenv import load_dotenv
 import time
-from reportlab.lib.pagesizes import letter
+from reportlab.lib.pagesizes import letter, inch
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
-from reportlab.pdfgen import canvas
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, PageBreak
+from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER, TA_LEFT
+from reportlab.lib.pagesizes import letter, inch
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, PageBreak
+from reportlab.lib.units import inch
+from datetime import datetime
+import re
+
+
 
 # Load environment variables from .env file
 load_dotenv()
 
 # Set your OpenAI API key from environment variable
-openai.api_key = st.secrets["OPENAI_API_KEY"]
+openai.api_key = os.getenv('OPENAI_API_KEY')
 
 # Set your Telegram bot token and chat ID
 telegram_bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
@@ -275,55 +283,123 @@ def save_report_as_word(report, filename):
     except Exception as e:
         st.error(f"Failed to save Word report: {e}")
 
+
 def save_report_as_pdf(report, filename):
     try:
         doc = SimpleDocTemplate(filename, pagesize=letter)
         elements = []
 
-        # Add the cover page
+        # Adjust the logo path and size
+        logo_path = "https://dcxsea.com/asset/images/logo/LOGO_DCX.png"
+        logo = Image(logo_path, 2 * inch, 1 * inch)
+
+        # Create the company name Paragraph style and the paragraph itself
+        company_name_style = ParagraphStyle(name='CompanyNameStyle',fontName='Helvetica-Bold', fontSize=20, leading=22, alignment=TA_CENTER)
+        company_name = Paragraph("DCx Co., Ltd.", company_name_style)
+
+        # Create a table to hold the logo and the company name side by side
+        logo_and_name_table = Table(
+            [[logo, company_name]],
+            colWidths=[2 * inch, 2 * inch],  # Adjust column widths as needed
+        )
+
+        # Style the table to center everything
+        logo_and_name_table.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),  # Center both the logo and the company name
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),  # Vertically align them in the middle
+        ]))
+
+        # Center the table itself on the page
+        elements.append(Spacer(1, 10))  # Add space at the top to center the logo and name vertically
+        elements.append(logo_and_name_table)
+        elements.append(Spacer(1, 36))
+
+        # Add the cover page details
         cover_style = ParagraphStyle(name='CoverStyle', fontSize=24, alignment=TA_CENTER, spaceAfter=12)
-        elements.append(Paragraph("DCx Co., Ltd.", cover_style))
-        elements.append(Spacer(1, 24))
         elements.append(Paragraph("Report", cover_style))
-        elements.append(Spacer(1, 24))
+        elements.append(Spacer(1, 40))
         elements.append(Paragraph("Indigenous Agriculture Adaptation", cover_style))
-        elements.append(Spacer(1, 24))
+        elements.append(Spacer(1, 60))
         elements.append(Paragraph(f"Prepared for: Jack Jasmin", ParagraphStyle(name='Normal', fontSize=14, alignment=TA_CENTER)))
         elements.append(Spacer(1, 12))
         elements.append(Paragraph(f"Prepared by: Black Eye Team", ParagraphStyle(name='Normal', fontSize=14, alignment=TA_CENTER)))
-        elements.append(Spacer(1, 12))
+        elements.append(Spacer(1, 300))
         elements.append(Paragraph(f"Date: {datetime.now().strftime('%B %d, %Y')}", ParagraphStyle(name='Normal', fontSize=14, alignment=TA_CENTER)))
-        elements.append(Spacer(1, 36))
+        elements.append(Spacer(1, 1))
 
-        # Create the style for the document
+        # Create the styles for the document
         styles = getSampleStyleSheet()
         normal_style = ParagraphStyle(name='Normal', fontSize=12, leading=14, alignment=TA_JUSTIFY)
-        heading1_style = ParagraphStyle(name='Heading1', fontSize=16, leading=18, alignment=TA_CENTER, spaceAfter=12)
-        heading2_style = ParagraphStyle(name='Heading2', fontSize=14, leading=16, alignment=TA_CENTER, spaceAfter=12)
+        heading1_style = ParagraphStyle(name='Heading1', fontSize=16, leading=18, alignment=TA_LEFT, spaceAfter=12)
+        heading2_style = ParagraphStyle(name='Heading2', fontSize=14, leading=16, alignment=TA_LEFT, spaceAfter=12)
+        heading3_style = ParagraphStyle(name='Heading3', fontSize=12, leading=14, alignment=TA_LEFT, spaceAfter=12)
+        heading4_style = ParagraphStyle(name='Heading4', fontSize=10, leading=12, alignment=TA_LEFT, spaceAfter=12)
         bullet_style = ParagraphStyle(name='Bullet', fontSize=12, leading=14, alignment=TA_JUSTIFY, bulletIndent=12)
 
         # Split the report into lines
         lines = report.split('\n')
+        lines = lines[1:]  # Skip the first line
 
         # Convert the report text into Paragraphs for the PDF
         for line in lines:
             line = line.strip()
             if not line:
                 elements.append(Spacer(1, 12))
+            elif line == "---":
+                elements.append(PageBreak()) 
             elif line.startswith('# '):
                 elements.append(Paragraph(line[2:], heading1_style))
             elif line.startswith('## '):
                 elements.append(Paragraph(line[3:], heading2_style))
+            elif line.startswith('### '):
+                elements.append(Paragraph(line[4:], heading3_style))
+            elif line.startswith('#### '):
+                elements.append(Paragraph(line[5:], heading4_style))
+            elif line.startswith('**** '):
+                elements.append(Paragraph(line[5:], bullet_style))
+            elif line.startswith('*** '):
+                elements.append(Paragraph(line[4:], bullet_style))
+            elif line.startswith('** '):
+                elements.append(Paragraph(line[3:], bullet_style))
             elif line.startswith('* '):
                 elements.append(Paragraph(line[2:], bullet_style))
+            elif "|" in line:
+                # Handle table creation more robustly
+                table_data = [[Paragraph(cell.strip(), normal_style) for cell in line.split('|') if cell]]
+                
+                table = Table(table_data, colWidths=[1.5 * inch] * len(table_data[0]))  # Adjust colWidths based on content
+                
+                table.setStyle(TableStyle([
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 12),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                    ('TOPPADDING', (0, 0), (-1, -1), 6),
+                ]))
+                elements.append(table)
             else:
-                elements.append(Paragraph(line, normal_style))
+                # Handle bold text with '**' in PDF
+                bold_pattern = re.compile(r'\*\*(.+?)\*\*')
+                if bold_pattern.search(line):
+                    parts = bold_pattern.split(line)
+                    for i, part in enumerate(parts):
+                        if i % 2 == 1:
+                            elements.append(Paragraph(part, ParagraphStyle(name='Bold', fontSize=12, leading=14, alignment=TA_JUSTIFY, fontName='Helvetica-Bold')))
+                        else:
+                            elements.append(Paragraph(part, normal_style))
+                else:
+                    elements.append(Paragraph(line, normal_style))
             elements.append(Spacer(1, 12))
 
         # Build the PDF
         doc.build(elements)
     except Exception as e:
         st.error(f"Failed to save PDF report: {e}")
+
 
 def create_zip_file(word_filename, pdf_filename, zip_filename):
     try:
